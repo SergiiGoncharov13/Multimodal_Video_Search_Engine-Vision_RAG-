@@ -1,0 +1,11 @@
+opencv-python
+mlx-vlm
+sqlalchemy
+pgvector
+psycopg2-binary
+sentence-transformers
+streamlit
+torchvision
+watchdog
+mlx-lm
+python-dotenv
