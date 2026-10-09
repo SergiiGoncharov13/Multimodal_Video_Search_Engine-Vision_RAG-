@@ -10,3 +10,6 @@ watchdog
 mlx-lm
 python-dotenv
 numpy
+langchain-google-genai
+langchain
+langchain-core
