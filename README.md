@@ -82,7 +82,7 @@ docker compose up -d
 Place your video file in `data/videos/` (e.g. `data/videos/video_file.mp4`) and run the ingestion pipeline:
 
 ```bash
-.venv/bin/python src/ingest.py data/videos/video_file.mp4
+python src/ingest.py data/videos/video_file.mp4
 ```
 
 This will:
@@ -95,7 +95,7 @@ This will:
 Start the interactive search UI:
 
 ```bash
-.venv/bin/streamlit run src/app.py
+streamlit run src/app.py
 ```
 
 Open your browser at `http://localhost:8501`. Ask any question about the video content to retrieve the matched frame timestamp, AI vision logs, and model-generated answer.
