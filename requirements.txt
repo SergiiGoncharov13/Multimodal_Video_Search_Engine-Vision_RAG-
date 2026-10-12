@@ -13,3 +13,4 @@ numpy
 langchain-google-genai
 langchain
 langchain-core
+fastapi

@@ -11,7 +11,7 @@ from langchain_core.tools import StructuredTool
 
 from ingest import VideoFrame, DATABASE_URL
 
-load_dotenv()
+load_dotenv(override=True)
 
 
 class VideoAnalysisAgent:
@@ -27,13 +27,12 @@ class VideoAnalysisAgent:
             name="search_video_timestamp",
             description="""
             Searches the video database for a specific event, object, or action.
-            Call this tool whenever the user asks what happens in a video, or asks 
-            to find a specific moment.
+            Returns matching timestamps, filenames, and visual captions.
             """
         )
         
         self.llm = ChatGoogleGenerativeAI(
-            model=os.getenv("MODEL"),
+            model=os.getenv("MODEL", "gemini-3.5-flash"),
             temperature=0.0,
             max_retries=2,
             google_api_key=os.getenv("GOOGLE_API_KEY")
@@ -41,8 +40,8 @@ class VideoAnalysisAgent:
         
         system_prompt = (
             "You are an expert video analysis agent. You answer questions about video files. "
-            "Always use the search_video_timestamps tool to gather evidence before answering. "
-            "If a user asks a complex question, call the tool multiple times with different search phrasing."
+            "Call the search_video_timestamp tool once or twice with a relevant query to retrieve evidence. "
+            "Then synthesize a clear and helpful answer based on the retrieved scene captions."
         )
 
         self.agent_executer = create_react_agent(
@@ -52,7 +51,7 @@ class VideoAnalysisAgent:
         )
         print("React Agent created successfully")
 
-    def _search_video_timestamp(self, query: str, limit: int=3) -> str:
+    def _search_video_timestamp(self, query: str, limit: int = 5) -> str:
         print(f"\n[Agent called tool] Searching for '{query}'")
         query_vector = self.embedder.encode(query)
         with self.SessionLocal() as session:
@@ -75,7 +74,20 @@ class VideoAnalysisAgent:
                 for tool_call in message.tool_calls:
                     print(f"-> Agent routing to {tool_call['name']} with {tool_call['args']}")
             elif message.type == "ai" and message.content:
-                final_answer = message.content
+                if isinstance(message.content, str):
+                    final_answer = message.content
+                elif isinstance(message.content, list):
+                    text_parts = []
+                    for part in message.content:
+                        if isinstance(part, dict) and "text" in part:
+                            text_parts.append(part["text"])
+                        elif isinstance(part, str):
+                            text_parts.append(part)
+                        elif hasattr(part, "text"):
+                            text_parts.append(str(part.text))
+                    final_answer = "".join(text_parts) if text_parts else str(message.content)
+                else:
+                    final_answer = str(message.content)
 
         return final_answer
 

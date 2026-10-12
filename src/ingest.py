@@ -13,12 +13,9 @@ from pgvector.sqlalchemy import Vector
 from sentence_transformers import SentenceTransformer
 from dotenv import load_dotenv
 
-load_dotenv()
+load_dotenv(override=True)
 
-POSTGRES_USER = os.getenv("POSTGRES_USER", "user")
-POSTGRES_PASSWORD = os.getenv("POSTGRES_PASSWORD", "password")
-POSTGRES_DB = os.getenv("POSTGRES_DB", "video_rag")
-DATABASE_URL = f"postgresql+psycopg2://{POSTGRES_USER}:{POSTGRES_PASSWORD}@localhost:5432/{POSTGRES_DB}"
+DATABASE_URL = os.getenv("DATABASE_URL")
 
 Base = declarative_base()
 
@@ -114,7 +111,7 @@ def extract_key_frames(video_path: str, output_dir: str, threshold: float = 30.0
         frame_index += 1
     
     cap.release()
-    print(f"Done. Extracted {len(metadata)} uniaue scene keyframes to {output_dir}")
+    print(f"Done. Extracted {len(metadata)} unique scene keyframes to {output_dir}")
     return metadata
     
 def caption_frames(metadata: list):
