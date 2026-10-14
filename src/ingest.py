@@ -1,8 +1,9 @@
 import os
 import argparse
-from datetime import timedelta
 import warnings
 import gc
+import subprocess
+from datetime import timedelta
 
 import cv2
 import numpy as np
@@ -27,6 +28,10 @@ def setup_database():
         conn.execute(text("CREATE EXTENSION IF NOT EXISTS vector;"))
         conn.commit()
     Base.metadata.create_all(engine)
+    with engine.connect() as conn:
+        conn.execute(text("ALTER TABLE video_frames ADD COLUMN IF NOT EXISTS modality VARCHAR(50);"))
+        conn.execute(text("ALTER TABLE video_frames ALTER COLUMN filepath DROP NOT NULL;"))
+        conn.commit()
     return sessionmaker(bind=engine)
 
 
@@ -164,32 +169,88 @@ def caption_frames(metadata: list):
 
     return metadata
 
+def transcribe_audio(video_path: str) -> list[dict]:
+    """
+    Extracts audio from video, transcribes it using Whisper.
+    Args:
+        video_path: Path to the video file
+    Returns:
+        List of dictionaries containing audio metadata
+    """
+    print("Extracting and Transcribing Audio")
+    audio_path = video_path.replace(".mp4", ".wav")
+    command = [
+        "ffmpeg", "-y", "-i", video_path, 
+        "-vn", "-acodec", "pcm_s16le", "-ar", "16000", "-ac", "1", 
+        audio_path
+    ]
+    try:
+        subprocess.run(command, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=True)
+    except subprocess.CalledProcessError:
+        print("Could not extract audio (video might not have an audio track)")
+        return []
+    
+    print("Loading MLX Whisper")
+    import mlx_whisper
+    result = mlx_whisper.transcribe(
+        audio=audio_path,
+        path_or_hf_repo="mlx-community/whisper-tiny",
+        word_timestamps=True
+    )
+    audio_metadata = []
+    for segment in result.get("segments", []):
+        start_sec = int(segment["start"])
+        text = segment["text"].strip()
+        if not text:
+            continue
+        time_str = str(timedelta(seconds=start_sec))
+        audio_metadata.append({
+            "timestamp_sec": start_sec,
+            "timestamp_formatted": time_str,
+            "filepath": None,
+            "caption": f"[Spoken Audio]: {text}",
+            "modality": "audio"
+        })
+        print(f"[{time_str}] Transcribed: {text[:50]}... Done!")
+    
+    if os.path.exists(audio_path):
+        os.remove(audio_path)
+    print(f"Extracted {len(audio_metadata)} audio text segments")
+    return audio_metadata
+
 
 def store_data(metadata: list, video_name: str, Session):
     """
     Embeds the captions and stores the metadata and embeddings in the database.
     """
+    if not metadata:
+        print(f"No metadata to store for '{video_name}'.")
+        return
+
     print("Loading embedding model (all-MiniLM-L6-v2)...", flush=True)
     from sentence_transformers import SentenceTransformer
     embedder = SentenceTransformer("all-MiniLM-L6-v2")
 
     total = len(metadata)
-    print(f"Generating embeddings and storing {total} frames in database...", flush=True)
+    print(f"Generating embeddings and storing {total} records in database...", flush=True)
+
+    captions = [item["caption"] for item in metadata]
+    vectors = embedder.encode(captions, show_progress_bar=True)
 
     with Session() as session:
-        for i, item in enumerate(metadata):
-            vector = embedder.encode(item["caption"])
+        for item, vector in zip(metadata, vectors):
             record = VideoFrame(
                 video_name=video_name,
                 timestamp_sec=int(item["timestamp_sec"]),
                 timestamp_formatted=item.get("timestamp_formatted", str(timedelta(seconds=int(item["timestamp_sec"])))),
-                filepath=item["filepath"],
+                filepath=item.get("filepath"),
                 caption=item["caption"],
+                modality=item.get("modality", "visual"),
                 text_embedding=vector
             )
             session.add(record)
         session.commit()
-    print(f"Successfully stored {total} frames for '{video_name}' in database.")
+    print(f"Successfully stored {total} items for '{video_name}' in database.")
 
 
 if __name__ == "__main__":
@@ -207,19 +268,25 @@ if __name__ == "__main__":
     print(f"Target video: {args.video_path}")
     print("=" * 60)
 
-    print("\n[Step 1/3] Connecting to database...")
     Session = setup_database()
-    print("Database connection established and tables verified.")
 
-    print("\n[Step 2/3] Extracting scene keyframes...")
+    print("\n[Step 1/4] Extracting scene keyframes...")
     frames = extract_key_frames(args.video_path, args.output_dir)
     print(f"Extracted {len(frames)} frames.")
 
-    print("\n[Step 3/3] Captioning frames and generating vector embeddings...")
-    captioned_frames = caption_frames(frames)
+    print("\n[Step 2/4] Captioning frames and generating vector embeddings...")
+    saved_frames = caption_frames(frames)
 
+    for frame in saved_frames:
+        frame["modality"] = "visual"
+
+    print("\n[Step 3/4] Processing audio track...")
+    audio_segments = transcribe_audio(args.video_path)
+
+    print("\n[Step 4/4] Generating embeddings and storing to database...")
+    all_data = saved_frames + audio_segments
     video_name = os.path.basename(args.video_path)
-    store_data(captioned_frames, video_name, Session)
+    store_data(all_data, video_name, Session)
 
     print("\n" + "=" * 60)
     print("Pipeline finished successfully!")

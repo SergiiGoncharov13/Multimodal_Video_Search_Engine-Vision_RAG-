@@ -57,6 +57,10 @@ class VideoAnalysisAgent:
         print("React Agent created successfully")
 
     def _search_video_timestamp(self, query: str, limit: int = 5) -> str:
+        """
+        Searches the video database for visual events, objects, actions, OR spoken dialogue.
+        Call this tool if the user asks what happens visually, or what was said/spoken.
+        """
         print(f"\n[Agent called tool] Searching for '{query}'")
         query_vector = self.embedder.encode(query)
         with self.SessionLocal() as session:
@@ -66,36 +70,8 @@ class VideoAnalysisAgent:
 
         formatted_results = []
         for res in results:
-            formatted_results.append(f"- Timestamp {res.timestamp_sec}s in {res.video_name}: {res.caption}")
+            formatted_results.append(f"- Timestamp {res.timestamp_sec}s, {res.modality} in {res.video_name}: {res.caption}")
         return "\n".join(formatted_results)
-        
-    def ask(self, question: str) -> str:
-        inputs = {"messages": [HumanMessage(content=question)]}
-        final_answer = ""
-
-        for chunk in self.agent_executer.stream(inputs, stream_mode="values"):
-            message = chunk["messages"][-1]
-            if hasattr(message, "tool_calls") and message.tool_calls:
-                for tool_call in message.tool_calls:
-                    print(f"-> Agent routing to {tool_call['name']} with {tool_call['args']}")
-            elif message.type == "ai" and message.content:
-                if isinstance(message.content, str):
-                    final_answer = message.content
-                elif isinstance(message.content, list):
-                    text_parts = []
-                    for part in message.content:
-                        if isinstance(part, dict) and "text" in part:
-                            text_parts.append(part["text"])
-                        elif isinstance(part, str):
-                            text_parts.append(part)
-                        elif hasattr(part, "text"):
-                            text_parts.append(str(part.text))
-                    final_answer = "".join(text_parts) if text_parts else str(message.content)
-                else:
-                    final_answer = str(message.content)
-
-        return final_answer
-
 
     async def astream_ask(self, question: str):
         inputs = {"messages": [HumanMessage(content=question)]}
