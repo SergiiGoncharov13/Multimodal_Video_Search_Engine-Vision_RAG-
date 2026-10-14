@@ -1,16 +1,17 @@
-opencv-python
-mlx-vlm
 sqlalchemy
 pgvector
 psycopg2-binary
 sentence-transformers
-streamlit
-torchvision
-watchdog
-mlx-lm
 python-dotenv
 numpy
 langchain-google-genai
 langchain
 langchain-core
 fastapi
+google-genai
+
+# --- macOS-Only Ingestion Dependencies ---
+opencv-python; sys_platform == 'darwin'
+torchvision; sys_platform == 'darwin'
+mlx-vlm; sys_platform == 'darwin'
+mlx-lm; sys_platform == 'darwin'

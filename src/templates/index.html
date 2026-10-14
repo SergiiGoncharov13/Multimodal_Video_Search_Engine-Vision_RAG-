@@ -1,0 +1,265 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Video RAG Agent</title>
+    <style>
+        :root {
+            --bg-color: #1e1e2e;
+            --chat-bg: #181825;
+            --user-bubble: #89b4fa;
+            --user-text: #11111b;
+            --ai-bubble: #313244;
+            --ai-text: #cdd6f4;
+            --system-text: #a6adc8;
+            --border-color: #45475a;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            background-color: var(--bg-color);
+            color: var(--ai-text);
+            margin: 0;
+            padding: 0;
+            display: flex;
+            flex-direction: column;
+            height: 100vh;
+        }
+
+        header {
+            background-color: var(--chat-bg);
+            padding: 1rem 2rem;
+            border-bottom: 1px solid var(--border-color);
+            text-align: center;
+            font-weight: 600;
+            font-size: 1.2rem;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            z-index: 10;
+        }
+
+        #chat-container {
+            flex-grow: 1;
+            padding: 2rem;
+            overflow-y: auto;
+            display: flex;
+            flex-direction: column;
+            gap: 1.5rem;
+            max-width: 800px;
+            margin: 0 auto;
+            width: 100%;
+            box-sizing: border-box;
+        }
+
+        .message {
+            max-width: 80%;
+            padding: 1rem 1.2rem;
+            border-radius: 12px;
+            line-height: 1.5;
+            white-space: pre-wrap;
+            word-wrap: break-word;
+        }
+
+        .user-message {
+            background-color: var(--user-bubble);
+            color: var(--user-text);
+            align-self: flex-end;
+            border-bottom-right-radius: 2px;
+        }
+
+        .ai-message {
+            background-color: var(--ai-bubble);
+            color: var(--ai-text);
+            align-self: flex-start;
+            border-bottom-left-radius: 2px;
+        }
+
+        .system-message {
+            align-self: center;
+            background: transparent;
+            color: var(--system-text);
+            font-size: 0.9rem;
+            font-style: italic;
+            padding: 0.5rem;
+            max-width: 100%;
+            text-align: center;
+        }
+
+        .input-area {
+            background-color: var(--chat-bg);
+            padding: 1.5rem;
+            border-top: 1px solid var(--border-color);
+            display: flex;
+            justify-content: center;
+        }
+
+        .input-container {
+            max-width: 800px;
+            width: 100%;
+            display: flex;
+            gap: 1rem;
+        }
+
+        input[type="text"] {
+            flex-grow: 1;
+            padding: 1rem;
+            border-radius: 8px;
+            border: 1px solid var(--border-color);
+            background-color: var(--bg-color);
+            color: var(--ai-text);
+            font-size: 1rem;
+            outline: none;
+            transition: border-color 0.2s;
+        }
+
+        input[type="text"]:focus {
+            border-color: var(--user-bubble);
+        }
+
+        button {
+            padding: 0 1.5rem;
+            border-radius: 8px;
+            border: none;
+            background-color: var(--user-bubble);
+            color: var(--user-text);
+            font-size: 1rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: opacity 0.2s;
+        }
+
+        button:hover {
+            opacity: 0.9;
+        }
+        
+        button:disabled {
+            background-color: var(--border-color);
+            cursor: not-allowed;
+            opacity: 0.5;
+        }
+
+        /* Hide scrollbar for cleaner look but keep functionality */
+        #chat-container::-webkit-scrollbar {
+            width: 8px;
+        }
+        #chat-container::-webkit-scrollbar-track {
+            background: var(--bg-color);
+        }
+        #chat-container::-webkit-scrollbar-thumb {
+            background: var(--border-color);
+            border-radius: 4px;
+        }
+    </style>
+</head>
+<body>
+
+    <header>Multimodal Video RAG Agent</header>
+
+    <div id="chat-container">
+        <div class="system-message">Welcome! Ask a question about your video library.</div>
+    </div>
+
+    <div class="input-area">
+        <div class="input-container">
+            <input type="text" id="questionInput" placeholder="e.g., At what timestamp does the red car appear?" onkeypress="handleKeyPress(event)">
+            <button id="sendBtn" onclick="sendQuestion()">Send</button>
+        </div>
+    </div>
+
+    <script>
+        const chatContainer = document.getElementById('chat-container');
+        const input = document.getElementById('questionInput');
+        const sendBtn = document.getElementById('sendBtn');
+        let currentAiMessageDiv = null;
+        
+        // Connect to the FastAPI WebSocket
+        // Using window.location.host automatically adapts if you deploy to a remote server
+        const wsProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+        const ws = new WebSocket(`${wsProtocol}//${window.location.host}/ws/ask`);
+        
+        ws.onopen = () => {
+            console.log("WebSocket connection established");
+        };
+
+        ws.onmessage = function(event) {
+            const data = event.data;
+
+            if (data === "[DONE]") {
+                currentAiMessageDiv = null; // Reset so the next response gets a new bubble
+                enableInput();
+                return;
+            }
+
+            // System routing messages (Tool calls, database results)
+            if (data.startsWith("🔄") || data.startsWith("✅")) {
+                appendMessage(data, 'system-message');
+                currentAiMessageDiv = null; // Ensure the final AI answer gets its own bubble
+                return;
+            }
+
+            // AI's final answer
+            // If we don't have an active AI bubble, create one
+            if (!currentAiMessageDiv) {
+                currentAiMessageDiv = document.createElement('div');
+                currentAiMessageDiv.className = 'message ai-message';
+                chatContainer.appendChild(currentAiMessageDiv);
+            }
+            
+            // Append the text chunk to the existing AI bubble
+            // We use replace() just in case the backend sends the "🧠 Final Answer:\n" prefix
+            currentAiMessageDiv.textContent += data.replace("🧠 Final Answer:\n", "");
+            scrollToBottom();
+        };
+
+        ws.onerror = (error) => {
+            console.error("WebSocket Error:", error);
+            appendMessage("⚠️ Connection error. Make sure the FastAPI server is running.", 'system-message');
+            enableInput();
+        };
+
+        ws.onclose = () => {
+            appendMessage("⚠️ Disconnected from server.", 'system-message');
+            enableInput();
+        };
+
+        function sendQuestion() {
+            const question = input.value.trim();
+            if (!question) return;
+            
+            disableInput();
+            appendMessage(question, 'message user-message');
+            ws.send(question);
+            input.value = '';
+        }
+
+        function handleKeyPress(event) {
+            if (event.key === 'Enter') {
+                sendQuestion();
+            }
+        }
+
+        function appendMessage(text, className) {
+            const div = document.createElement('div');
+            div.className = className;
+            div.textContent = text;
+            chatContainer.appendChild(div);
+            scrollToBottom();
+        }
+
+        function scrollToBottom() {
+            chatContainer.scrollTop = chatContainer.scrollHeight;
+        }
+
+        function disableInput() {
+            input.disabled = true;
+            sendBtn.disabled = true;
+        }
+
+        function enableInput() {
+            input.disabled = false;
+            sendBtn.disabled = false;
+            input.focus();
+        }
+    </script>
+</body>
+</html>

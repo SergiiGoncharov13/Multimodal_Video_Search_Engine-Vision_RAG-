@@ -18,7 +18,7 @@ The system extracts keyframes from video files, generates rich visual descriptio
 
 ## System Requirements
 
-- **Hardware**: Mac with Apple Silicon (**M1 / M2 / M3 / M4**).
+- **Hardware**: Mac with Apple Silicon (**M1 / M2 / M3 / M4 / M5**).
   - *MLX relies on Apple Silicon's unified memory architecture and Metal GPU acceleration.*
 - **Operating System**: macOS 13.0+ (Ventura, Sonoma, Sequoia).
 - **Python**: Python **3.12** recommended.

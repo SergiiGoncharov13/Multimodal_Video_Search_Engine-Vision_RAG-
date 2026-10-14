@@ -1,4 +1,7 @@
 import os
+import sys
+import warnings
+from pathlib import Path
 
 from dotenv import load_dotenv
 from sqlalchemy import create_engine
@@ -9,9 +12,11 @@ from langchain_google_genai import ChatGoogleGenerativeAI
 from langchain_core.messages import HumanMessage
 from langchain_core.tools import StructuredTool
 
-from ingest import VideoFrame, DATABASE_URL
+from models import VideoFrame
 
-load_dotenv(override=True)
+warnings.filterwarnings("ignore", category=UserWarning, module="torch")
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+load_dotenv()
 
 
 class VideoAnalysisAgent:
@@ -92,7 +97,18 @@ class VideoAnalysisAgent:
         return final_answer
 
 
-if __name__ == "__main__":
-    agent = VideoAnalysisAgent(DATABASE_URL)
-    response = agent.ask("What happens in the video?")
-    print(response)
+    async def astream_ask(self, question: str):
+        inputs = {"messages": [HumanMessage(content=question)]}
+        
+        async for chunk in self.agent_executer.astream(inputs, stream_mode="values"):
+            message = chunk["messages"][-1]
+            
+            if hasattr(message, "tool_calls") and message.tool_calls:
+                for tool_call in message.tool_calls:
+                    yield f"🔄 Calling tool: {tool_call['name']} with {tool_call['args']}"
+            
+            elif message.type == "tool":
+                yield "✅ Database returned results"
+
+            elif message.type == "ai" and message.content:
+                yield f"Final answer:\n{message.content}"
