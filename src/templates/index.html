@@ -3,263 +3,1152 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Video RAG Agent</title>
+    <title>Multimodal Video RAG Search Engine</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
     <style>
         :root {
-            --bg-color: #1e1e2e;
-            --chat-bg: #181825;
-            --user-bubble: #89b4fa;
-            --user-text: #11111b;
-            --ai-bubble: #313244;
-            --ai-text: #cdd6f4;
-            --system-text: #a6adc8;
-            --border-color: #45475a;
+            --bg-base: #0b0d14;
+            --panel-bg: #131622;
+            --panel-border: #1f253b;
+            --panel-hover: #191e30;
+            --accent: #7aa2f7;
+            --accent-glow: rgba(122, 162, 247, 0.25);
+            --accent-hover: #89b4fa;
+            --text-main: #c0caf5;
+            --text-muted: #7982a9;
+            --text-dim: #565f89;
+            --user-bubble: #232d4b;
+            --user-bubble-border: #3b4b7a;
+            --ai-bubble: #161928;
+            --ai-bubble-border: #242940;
+            --success: #9ece6a;
+            --warning: #e0af68;
+            --danger: #f7768e;
+            --purple: #bb9af7;
+            --cyan: #7dcfff;
         }
+
+        * { box-sizing: border-box; margin: 0; padding: 0; }
 
         body {
-            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-            background-color: var(--bg-color);
-            color: var(--ai-text);
-            margin: 0;
-            padding: 0;
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            background-color: var(--bg-base);
+            color: var(--text-main);
+            height: 100vh;
             display: flex;
             flex-direction: column;
-            height: 100vh;
+            overflow: hidden;
         }
 
+        /* Header */
         header {
-            background-color: var(--chat-bg);
-            padding: 1rem 2rem;
-            border-bottom: 1px solid var(--border-color);
-            text-align: center;
-            font-weight: 600;
-            font-size: 1.2rem;
-            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            background-color: var(--panel-bg);
+            padding: 0.85rem 1.5rem;
+            border-bottom: 1px solid var(--panel-border);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
             z-index: 10;
         }
 
-        #chat-container {
-            flex-grow: 1;
+        .header-brand {
+            display: flex;
+            align-items: center;
+            gap: 0.65rem;
+        }
+
+        .header-title {
+            font-size: 1.15rem;
+            font-weight: 700;
+            background: linear-gradient(135deg, #7aa2f7 0%, #bb9af7 50%, #7dcfff 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            letter-spacing: -0.01em;
+        }
+
+        .header-badge {
+            font-size: 0.72rem;
+            padding: 0.2rem 0.5rem;
+            border-radius: 999px;
+            background: rgba(122, 162, 247, 0.12);
+            border: 1px solid rgba(122, 162, 247, 0.3);
+            color: var(--accent);
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+        }
+
+        .header-status {
+            display: flex;
+            align-items: center;
+            gap: 1.2rem;
+            font-size: 0.82rem;
+        }
+
+        .status-pill {
+            display: flex;
+            align-items: center;
+            gap: 0.45rem;
+            color: var(--text-muted);
+            background: rgba(255, 255, 255, 0.03);
+            padding: 0.3rem 0.75rem;
+            border-radius: 20px;
+            border: 1px solid var(--panel-border);
+        }
+
+        .pulse-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background-color: var(--success);
+            box-shadow: 0 0 8px var(--success);
+            transition: all 0.3s ease;
+        }
+
+        .pulse-dot.disconnected {
+            background-color: var(--danger);
+            box-shadow: 0 0 8px var(--danger);
+        }
+
+        /* Main Workspace Layout */
+        #main-container {
+            display: flex;
+            flex: 1;
+            overflow: hidden;
+            position: relative;
+        }
+
+        /* Left Column: Video Stage */
+        #video-panel {
+            flex: 1.15;
+            border-right: 1px solid var(--panel-border);
+            background: radial-gradient(circle at center, #111422 0%, #07080e 100%);
+            display: flex;
+            flex-direction: column;
+            padding: 1.25rem;
+            overflow-y: auto;
+            position: relative;
+        }
+
+        /* Video Selector Header */
+        .video-toolbar {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 0.85rem;
+            flex-wrap: wrap;
+            gap: 0.5rem;
+        }
+
+        .video-selector-group {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            flex-wrap: wrap;
+        }
+
+        .video-selector-label {
+            font-size: 0.78rem;
+            color: var(--text-muted);
+            text-transform: uppercase;
+            letter-spacing: 0.04em;
+            font-weight: 600;
+        }
+
+        .video-pills {
+            display: flex;
+            gap: 0.4rem;
+            flex-wrap: wrap;
+        }
+
+        .video-pill {
+            background: var(--panel-bg);
+            border: 1px solid var(--panel-border);
+            color: var(--text-main);
+            padding: 0.25rem 0.65rem;
+            border-radius: 6px;
+            font-size: 0.78rem;
+            font-family: 'JetBrains Mono', monospace;
+            cursor: pointer;
+            transition: all 0.15s ease;
+            display: inline-flex;
+            align-items: center;
+            gap: 0.35rem;
+        }
+
+        .video-pill:hover {
+            border-color: var(--accent);
+            background: rgba(122, 162, 247, 0.08);
+        }
+
+        .video-pill.active {
+            border-color: var(--accent);
+            background: rgba(122, 162, 247, 0.18);
+            color: #fff;
+            box-shadow: 0 0 10px rgba(122, 162, 247, 0.2);
+        }
+
+        .video-stage-card {
+            background: #000;
+            border-radius: 12px;
+            border: 1px solid var(--panel-border);
+            overflow: hidden;
+            position: relative;
+            box-shadow: 0 12px 36px rgba(0, 0, 0, 0.6);
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            min-height: 280px;
+        }
+
+        video {
+            width: 100%;
+            max-height: 60vh;
+            display: block;
+            outline: none;
+            background: #000;
+        }
+
+        /* Error Overlay inside Video Player */
+        #video-error-overlay {
+            position: absolute;
+            inset: 0;
+            background: rgba(11, 13, 20, 0.92);
+            backdrop-filter: blur(8px);
+            display: none;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
             padding: 2rem;
+            text-align: center;
+            z-index: 5;
+        }
+
+        .error-icon {
+            font-size: 2.2rem;
+            margin-bottom: 0.75rem;
+        }
+
+        .error-title {
+            color: var(--danger);
+            font-size: 1.1rem;
+            font-weight: 600;
+            margin-bottom: 0.4rem;
+        }
+
+        .error-desc {
+            color: var(--text-muted);
+            font-size: 0.85rem;
+            max-width: 440px;
+            line-height: 1.5;
+            margin-bottom: 1.25rem;
+        }
+
+        .error-btn {
+            background: var(--accent);
+            color: #0b0d14;
+            border: none;
+            padding: 0.5rem 1.1rem;
+            border-radius: 6px;
+            font-weight: 600;
+            font-size: 0.82rem;
+            cursor: pointer;
+            transition: all 0.15s ease;
+        }
+
+        .error-btn:hover {
+            background: var(--accent-hover);
+            transform: translateY(-1px);
+        }
+
+        /* Cue Bar Under Video */
+        .video-control-bar {
+            margin-top: 0.85rem;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            background: var(--panel-bg);
+            border: 1px solid var(--panel-border);
+            padding: 0.65rem 1rem;
+            border-radius: 8px;
+        }
+
+        #current-cue-bar {
+            font-size: 0.82rem;
+            color: var(--text-muted);
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        #current-cue-bar strong {
+            color: var(--cyan);
+            font-family: 'JetBrains Mono', monospace;
+        }
+
+        .video-quick-actions {
+            display: flex;
+            gap: 0.4rem;
+        }
+
+        .quick-seek-btn {
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid var(--panel-border);
+            color: var(--text-muted);
+            font-size: 0.75rem;
+            padding: 0.25rem 0.5rem;
+            border-radius: 4px;
+            cursor: pointer;
+            transition: all 0.15s ease;
+        }
+
+        .quick-seek-btn:hover {
+            color: var(--accent);
+            border-color: var(--accent);
+        }
+
+        /* Right Column: Chat */
+        #chat-panel {
+            flex: 0.95;
+            display: flex;
+            flex-direction: column;
+            background: var(--panel-bg);
+            border-left: 1px solid var(--panel-border);
+            overflow: hidden;
+        }
+
+        #chat-messages {
+            flex: 1;
+            padding: 1.25rem;
             overflow-y: auto;
             display: flex;
             flex-direction: column;
-            gap: 1.5rem;
-            max-width: 800px;
-            margin: 0 auto;
-            width: 100%;
-            box-sizing: border-box;
-        }
-
-        .message {
-            max-width: 80%;
-            padding: 1rem 1.2rem;
-            border-radius: 12px;
-            line-height: 1.5;
-            white-space: pre-wrap;
-            word-wrap: break-word;
-        }
-
-        .user-message {
-            background-color: var(--user-bubble);
-            color: var(--user-text);
-            align-self: flex-end;
-            border-bottom-right-radius: 2px;
-        }
-
-        .ai-message {
-            background-color: var(--ai-bubble);
-            color: var(--ai-text);
-            align-self: flex-start;
-            border-bottom-left-radius: 2px;
-        }
-
-        .system-message {
-            align-self: center;
-            background: transparent;
-            color: var(--system-text);
-            font-size: 0.9rem;
-            font-style: italic;
-            padding: 0.5rem;
-            max-width: 100%;
-            text-align: center;
-        }
-
-        .input-area {
-            background-color: var(--chat-bg);
-            padding: 1.5rem;
-            border-top: 1px solid var(--border-color);
-            display: flex;
-            justify-content: center;
-        }
-
-        .input-container {
-            max-width: 800px;
-            width: 100%;
-            display: flex;
             gap: 1rem;
+            scroll-behavior: smooth;
+        }
+
+        /* Message Bubbles */
+        .msg {
+            max-width: 90%;
+            padding: 0.9rem 1.1rem;
+            border-radius: 12px;
+            line-height: 1.55;
+            font-size: 0.9rem;
+            position: relative;
+            animation: fadeIn 0.2s ease-out;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(6px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        .msg-header {
+            display: flex;
+            align-items: center;
+            gap: 0.45rem;
+            font-size: 0.74rem;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.04em;
+            margin-bottom: 0.4rem;
+        }
+
+        .msg-user {
+            background: var(--user-bubble);
+            border: 1px solid var(--user-bubble-border);
+            color: #fff;
+            align-self: flex-end;
+            border-bottom-right-radius: 3px;
+        }
+
+        .msg-user .msg-header {
+            color: #89b4fa;
+            justify-content: flex-end;
+        }
+
+        .msg-ai {
+            background: var(--ai-bubble);
+            border: 1px solid var(--ai-bubble-border);
+            color: var(--text-main);
+            align-self: flex-start;
+            border-bottom-left-radius: 3px;
+            box-shadow: 0 4px 16px rgba(0, 0, 0, 0.25);
+            width: 92%;
+        }
+
+        .msg-ai .msg-header {
+            color: var(--accent);
+        }
+
+        .msg-ai .markdown-content {
+            font-size: 0.88rem;
+            color: #dcd7ba;
+        }
+
+        .msg-ai .markdown-content p {
+            margin-bottom: 0.5rem;
+        }
+
+        .msg-ai .markdown-content p:last-child {
+            margin-bottom: 0;
+        }
+
+        .msg-ai .markdown-content ul, .msg-ai .markdown-content ol {
+            padding-left: 1.3rem;
+            margin-bottom: 0.5rem;
+        }
+
+        .msg-ai .markdown-content li {
+            margin-bottom: 0.25rem;
+        }
+
+        .msg-ai .markdown-content code {
+            font-family: 'JetBrains Mono', monospace;
+            background: rgba(0, 0, 0, 0.35);
+            padding: 0.15rem 0.35rem;
+            border-radius: 4px;
+            font-size: 0.82rem;
+            color: var(--cyan);
+        }
+
+        .msg-system {
+            align-self: center;
+            color: var(--text-dim);
+            font-size: 0.78rem;
+            font-style: normal;
+            background: rgba(255, 255, 255, 0.02);
+            border: 1px solid rgba(255, 255, 255, 0.04);
+            padding: 0.35rem 0.8rem;
+            border-radius: 20px;
+            display: inline-flex;
+            align-items: center;
+            gap: 0.4rem;
+        }
+
+        .msg-system.tool-call {
+            border-color: rgba(122, 162, 247, 0.2);
+            color: var(--accent);
+        }
+
+        .msg-system.tool-result {
+            border-color: rgba(158, 206, 106, 0.2);
+            color: var(--success);
+        }
+
+        /* Scene Cue Strip & Cards */
+        .cue-strip-header {
+            font-size: 0.75rem;
+            font-weight: 600;
+            color: var(--text-muted);
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            margin-top: 0.85rem;
+            padding-top: 0.65rem;
+            border-top: 1px solid var(--ai-bubble-border);
+            display: flex;
+            align-items: center;
+            gap: 0.4rem;
+        }
+
+        .cue-grid {
+            display: grid;
+            grid-template-columns: 1fr;
+            gap: 0.5rem;
+            margin-top: 0.5rem;
+        }
+
+        .cue-card {
+            background: rgba(20, 24, 38, 0.8);
+            border: 1px solid rgba(122, 162, 247, 0.18);
+            border-radius: 8px;
+            padding: 0.6rem 0.75rem;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .cue-card:hover {
+            border-color: var(--accent);
+            background: rgba(122, 162, 247, 0.1);
+            transform: translateX(3px);
+            box-shadow: 0 4px 12px rgba(122, 162, 247, 0.15);
+        }
+
+        .cue-card.missing-file {
+            border-color: rgba(247, 118, 142, 0.3);
+            background: rgba(247, 118, 142, 0.05);
+            opacity: 0.8;
+        }
+
+        .cue-card.missing-file:hover {
+            border-color: var(--danger);
+            background: rgba(247, 118, 142, 0.12);
+        }
+
+        .cue-thumb {
+            width: 64px;
+            height: 42px;
+            border-radius: 5px;
+            object-fit: cover;
+            background: #000;
+            border: 1px solid var(--panel-border);
+            flex-shrink: 0;
+        }
+
+        .cue-thumb-fallback {
+            width: 64px;
+            height: 42px;
+            border-radius: 5px;
+            background: #111422;
+            border: 1px solid var(--panel-border);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.1rem;
+            flex-shrink: 0;
+        }
+
+        .cue-details {
+            flex: 1;
+            min-width: 0;
+            display: flex;
+            flex-direction: column;
+            gap: 0.2rem;
+        }
+
+        .cue-meta-row {
+            display: flex;
+            align-items: center;
+            gap: 0.45rem;
+            flex-wrap: wrap;
+        }
+
+        .cue-time-badge {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.78rem;
+            font-weight: 600;
+            color: var(--cyan);
+            background: rgba(125, 207, 255, 0.12);
+            padding: 0.15rem 0.4rem;
+            border-radius: 4px;
+        }
+
+        .cue-video-name {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.74rem;
+            color: var(--text-dim);
+            max-width: 150px;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+
+        .cue-modality-badge {
+            font-size: 0.68rem;
+            text-transform: uppercase;
+            font-weight: 600;
+            padding: 0.1rem 0.35rem;
+            border-radius: 4px;
+            background: rgba(187, 154, 247, 0.15);
+            color: var(--purple);
+        }
+
+        .cue-status-badge {
+            font-size: 0.68rem;
+            font-weight: 600;
+            padding: 0.1rem 0.35rem;
+            border-radius: 4px;
+        }
+
+        .cue-status-badge.playable {
+            background: rgba(158, 206, 106, 0.15);
+            color: var(--success);
+        }
+
+        .cue-status-badge.missing {
+            background: rgba(247, 118, 142, 0.15);
+            color: var(--danger);
+        }
+
+        .cue-caption {
+            font-size: 0.77rem;
+            color: var(--text-muted);
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        /* Typing indicator */
+        .typing-indicator {
+            display: flex;
+            align-items: center;
+            gap: 0.35rem;
+            padding: 0.4rem 0.6rem;
+        }
+
+        .typing-dot {
+            width: 6px;
+            height: 6px;
+            border-radius: 50%;
+            background-color: var(--accent);
+            animation: bounce 1.4s infinite ease-in-out both;
+        }
+
+        .typing-dot:nth-child(1) { animation-delay: -0.32s; }
+        .typing-dot:nth-child(2) { animation-delay: -0.16s; }
+
+        @keyframes bounce {
+            0%, 80%, 100% { transform: scale(0); opacity: 0.3; }
+            40% { transform: scale(1); opacity: 1; }
+        }
+
+        /* Bottom Input */
+        .input-bar {
+            padding: 0.9rem 1rem;
+            border-top: 1px solid var(--panel-border);
+            display: flex;
+            gap: 0.75rem;
+            background: var(--panel-bg);
+            align-items: center;
+        }
+
+        .input-wrapper {
+            flex: 1;
+            position: relative;
+            display: flex;
+            align-items: center;
+        }
+
+        .input-icon {
+            position: absolute;
+            left: 0.9rem;
+            color: var(--text-dim);
+            font-size: 0.95rem;
+            pointer-events: none;
         }
 
         input[type="text"] {
-            flex-grow: 1;
-            padding: 1rem;
-            border-radius: 8px;
-            border: 1px solid var(--border-color);
-            background-color: var(--bg-color);
-            color: var(--ai-text);
-            font-size: 1rem;
+            width: 100%;
+            padding: 0.8rem 1rem 0.8rem 2.4rem;
+            border-radius: 10px;
+            background: var(--bg-base);
+            border: 1px solid var(--panel-border);
+            color: #fff;
             outline: none;
-            transition: border-color 0.2s;
+            font-size: 0.92rem;
+            font-family: inherit;
+            transition: all 0.2s ease;
         }
 
         input[type="text"]:focus {
-            border-color: var(--user-bubble);
+            border-color: var(--accent);
+            box-shadow: 0 0 0 3px var(--accent-glow);
         }
 
-        button {
-            padding: 0 1.5rem;
-            border-radius: 8px;
+        button.send-btn {
+            background: linear-gradient(135deg, var(--accent) 0%, #89b4fa 100%);
+            color: #0b0d14;
             border: none;
-            background-color: var(--user-bubble);
-            color: var(--user-text);
-            font-size: 1rem;
+            padding: 0 1.3rem;
+            height: 42px;
+            border-radius: 10px;
             font-weight: 600;
+            font-size: 0.88rem;
             cursor: pointer;
-            transition: opacity 0.2s;
+            transition: all 0.15s ease;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 0.4rem;
         }
 
-        button:hover {
-            opacity: 0.9;
+        button.send-btn:hover:not(:disabled) {
+            transform: translateY(-1px);
+            box-shadow: 0 4px 12px rgba(122, 162, 247, 0.35);
         }
-        
-        button:disabled {
-            background-color: var(--border-color);
+
+        button.send-btn:disabled {
+            opacity: 0.45;
             cursor: not-allowed;
-            opacity: 0.5;
-        }
-
-        /* Hide scrollbar for cleaner look but keep functionality */
-        #chat-container::-webkit-scrollbar {
-            width: 8px;
-        }
-        #chat-container::-webkit-scrollbar-track {
-            background: var(--bg-color);
-        }
-        #chat-container::-webkit-scrollbar-thumb {
-            background: var(--border-color);
-            border-radius: 4px;
+            transform: none;
         }
     </style>
 </head>
 <body>
 
-    <header>Multimodal Video RAG Agent</header>
+    <header>
+        <div class="header-brand">
+            <span class="header-title">🎬 Multimodal Video RAG</span>
+            <span class="header-badge">Vision & Audio</span>
+        </div>
+        <div class="header-status">
+            <div class="status-pill">
+                <div class="pulse-dot" id="ws-dot"></div>
+                <span id="ws-status">Connecting...</span>
+            </div>
+            <div class="status-pill">
+                <span>📁 Video:</span>
+                <strong id="active-video-label" style="color:var(--accent); font-family:'JetBrains Mono', monospace;">None</strong>
+            </div>
+        </div>
+    </header>
 
-    <div id="chat-container">
-        <div class="system-message">Welcome! Ask a question about your video library.</div>
-    </div>
+    <div id="main-container">
+        <!-- Left Column: Video Stage -->
+        <div id="video-panel">
+            <div class="video-toolbar">
+                <div class="video-selector-group">
+                    <span class="video-selector-label">Library:</span>
+                    <div class="video-pills" id="video-pills-container">
+                        <!-- Loaded dynamically -->
+                    </div>
+                </div>
+            </div>
 
-    <div class="input-area">
-        <div class="input-container">
-            <input type="text" id="questionInput" placeholder="e.g., At what timestamp does the red car appear?" onkeypress="handleKeyPress(event)">
-            <button id="sendBtn" onclick="sendQuestion()">Send</button>
+            <div class="video-stage-card">
+                <video id="player" controls playsinline>
+                    Your browser does not support HTML5 video.
+                </video>
+
+                <div id="video-error-overlay">
+                    <div class="error-icon">⚠️</div>
+                    <div class="error-title" id="overlay-error-title">Video File Not Found</div>
+                    <div class="error-desc" id="overlay-error-desc">
+                        The requested video file does not exist in the server's <code>data/videos/</code> directory.
+                    </div>
+                    <button class="error-btn" id="overlay-action-btn" onclick="recoverVideoPlayback()">Load forest.mp4</button>
+                </div>
+            </div>
+
+            <div class="video-control-bar">
+                <div id="current-cue-bar">
+                    <span>Target:</span>
+                    <strong id="cue-readout">Click any matched timestamp to jump</strong>
+                </div>
+                <div class="video-quick-actions">
+                    <button class="quick-seek-btn" onclick="stepVideo(-5)">-5s</button>
+                    <button class="quick-seek-btn" onclick="stepVideo(5)">+5s</button>
+                    <button class="quick-seek-btn" onclick="seekTo(currentVideoName, 0)">↺ Start</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Right Column: Chat Pane -->
+        <div id="chat-panel">
+            <div id="chat-messages">
+                <div class="msg msg-ai">
+                    <div class="msg-header">🤖 Video Analysis Agent</div>
+                    <div class="markdown-content">
+                        Hello! I am your Multimodal Video Search Agent. I can search across visual keyframes and spoken dialogue.
+                        <br><br>
+                        Try asking about events, actions, objects, or spoken conversations in the video!
+                    </div>
+                </div>
+            </div>
+
+            <div class="input-bar">
+                <div class="input-wrapper">
+                    <span class="input-icon">🔍</span>
+                    <input type="text" id="queryInput" placeholder="e.g. Where does the car appear in the forest?" onkeypress="if(event.key==='Enter') sendQuery()">
+                </div>
+                <button class="send-btn" id="sendBtn" onclick="sendQuery()">
+                    <span>Search</span>
+                </button>
+            </div>
         </div>
     </div>
 
     <script>
-        const chatContainer = document.getElementById('chat-container');
-        const input = document.getElementById('questionInput');
-        const sendBtn = document.getElementById('sendBtn');
-        let currentAiMessageDiv = null;
-        
-        // Connect to the FastAPI WebSocket
-        // Using window.location.host automatically adapts if you deploy to a remote server
-        const wsProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-        const ws = new WebSocket(`${wsProtocol}//${window.location.host}/ws/ask`);
-        
-        ws.onopen = () => {
-            console.log("WebSocket connection established");
-        };
+        const chat = document.getElementById("chat-messages");
+        const player = document.getElementById("player");
+        const queryInput = document.getElementById("queryInput");
+        const sendBtn = document.getElementById("sendBtn");
+        const cueReadout = document.getElementById("cue-readout");
+        const videoLabel = document.getElementById("active-video-label");
+        const wsDot = document.getElementById("ws-dot");
+        const wsStatus = document.getElementById("ws-status");
+        const pillsContainer = document.getElementById("video-pills-container");
+        const errorOverlay = document.getElementById("video-error-overlay");
+        const overlayTitle = document.getElementById("overlay-error-title");
+        const overlayDesc = document.getElementById("overlay-error-desc");
+        const overlayActionBtn = document.getElementById("overlay-action-btn");
 
-        ws.onmessage = function(event) {
-            const data = event.data;
+        let activeAiMsg = null;
+        let lastCues = [];
+        let diskVideos = [];
+        let dbVideos = [];
+        let currentVideoName = "";
+        let ws = null;
 
-            if (data === "[DONE]") {
-                currentAiMessageDiv = null; // Reset so the next response gets a new bubble
-                enableInput();
+        // Fetch available videos from server
+        async function loadVideoCatalog() {
+            try {
+                const resp = await fetch("/api/videos");
+                if (resp.ok) {
+                    const data = await resp.json();
+                    diskVideos = data.disk_videos || [];
+                    dbVideos = data.db_videos || [];
+                    renderVideoPills();
+
+                    // If not playing, default to the first available video on disk
+                    if (!currentVideoName && diskVideos.length > 0) {
+                        selectVideo(diskVideos[0]);
+                    }
+                }
+            } catch (err) {
+                console.warn("Failed to fetch video catalog:", err);
+            }
+        }
+
+        function renderVideoPills() {
+            pillsContainer.innerHTML = "";
+            if (diskVideos.length === 0) {
+                pillsContainer.innerHTML = `<span style="font-size:0.76rem; color:var(--danger)">No MP4 videos in data/videos/</span>`;
                 return;
             }
 
-            // System routing messages (Tool calls, database results)
-            if (data.startsWith("🔄") || data.startsWith("✅")) {
-                appendMessage(data, 'system-message');
-                currentAiMessageDiv = null; // Ensure the final AI answer gets its own bubble
+            diskVideos.forEach(v => {
+                const pill = document.createElement("button");
+                pill.className = `video-pill ${v === currentVideoName ? 'active' : ''}`;
+                pill.innerHTML = `<span>▶</span> ${v}`;
+                pill.onclick = () => selectVideo(v);
+                pillsContainer.appendChild(pill);
+            });
+        }
+
+        function selectVideo(videoName) {
+            currentVideoName = videoName;
+            videoLabel.textContent = videoName;
+            renderVideoPills();
+            hideVideoError();
+
+            const targetUrl = `/videos/${encodeURIComponent(videoName)}`;
+            const currentPath = player.currentSrc ? new URL(player.currentSrc, window.location.href).pathname : '';
+            
+            if (currentPath !== targetUrl) {
+                player.src = targetUrl;
+                player.load();
+                cueReadout.textContent = `Loaded ${videoName}`;
+            }
+        }
+
+        function showVideoError(videoName, message) {
+            overlayTitle.textContent = `Video File Not Found: "${videoName}"`;
+            overlayDesc.innerHTML = message;
+            if (diskVideos.length > 0 && diskVideos[0] !== videoName) {
+                overlayActionBtn.textContent = `Switch to ${diskVideos[0]}`;
+                overlayActionBtn.style.display = "inline-block";
+                overlayActionBtn.onclick = () => selectVideo(diskVideos[0]);
+            } else {
+                overlayActionBtn.style.display = "none";
+            }
+            errorOverlay.style.display = "flex";
+            cueReadout.innerHTML = `<span style="color:var(--danger)">⚠️ ${videoName} missing on disk</span>`;
+        }
+
+        function hideVideoError() {
+            errorOverlay.style.display = "none";
+        }
+
+        function recoverVideoPlayback() {
+            if (diskVideos.length > 0) {
+                selectVideo(diskVideos[0]);
+            }
+        }
+
+        player.onerror = () => {
+            const requestedName = currentVideoName || "requested video";
+            showVideoError(requestedName, `The video file <strong>${requestedName}</strong> could not be loaded from <code>data/videos/</code>.`);
+        };
+
+        function seekTo(videoName, seconds) {
+            // Check if file is missing on disk
+            if (diskVideos.length > 0 && !diskVideos.includes(videoName)) {
+                showVideoError(videoName, `Video <strong>${videoName}</strong> is referenced in the search database, but the physical file is not in <code>data/videos/</code>.`);
                 return;
             }
 
-            // AI's final answer
-            // If we don't have an active AI bubble, create one
-            if (!currentAiMessageDiv) {
-                currentAiMessageDiv = document.createElement('div');
-                currentAiMessageDiv.className = 'message ai-message';
-                chatContainer.appendChild(currentAiMessageDiv);
-            }
-            
-            // Append the text chunk to the existing AI bubble
-            // We use replace() just in case the backend sends the "🧠 Final Answer:\n" prefix
-            currentAiMessageDiv.textContent += data.replace("🧠 Final Answer:\n", "");
-            scrollToBottom();
-        };
+            hideVideoError();
 
-        ws.onerror = (error) => {
-            console.error("WebSocket Error:", error);
-            appendMessage("⚠️ Connection error. Make sure the FastAPI server is running.", 'system-message');
-            enableInput();
-        };
+            const applySeek = () => {
+                player.currentTime = Math.max(0, seconds);
+                player.play().catch(e => console.log("Autoplay paused by browser:", e));
+                cueReadout.innerHTML = `Playing at <strong>${formatTime(seconds)}</strong> in <strong>${videoName}</strong>`;
+            };
 
-        ws.onclose = () => {
-            appendMessage("⚠️ Disconnected from server.", 'system-message');
-            enableInput();
-        };
+            const targetUrl = `/videos/${encodeURIComponent(videoName)}`;
+            const currentPath = player.currentSrc ? new URL(player.currentSrc, window.location.href).pathname : '';
 
-        function sendQuestion() {
-            const question = input.value.trim();
-            if (!question) return;
-            
-            disableInput();
-            appendMessage(question, 'message user-message');
-            ws.send(question);
-            input.value = '';
-        }
-
-        function handleKeyPress(event) {
-            if (event.key === 'Enter') {
-                sendQuestion();
+            if (currentPath !== targetUrl) {
+                currentVideoName = videoName;
+                videoLabel.textContent = videoName;
+                renderVideoPills();
+                player.src = targetUrl;
+                
+                const onLoaded = () => {
+                    player.removeEventListener("loadedmetadata", onLoaded);
+                    applySeek();
+                };
+                player.addEventListener("loadedmetadata", onLoaded);
+                player.load();
+            } else {
+                applySeek();
             }
         }
 
-        function appendMessage(text, className) {
-            const div = document.createElement('div');
-            div.className = className;
-            div.textContent = text;
-            chatContainer.appendChild(div);
-            scrollToBottom();
+        function stepVideo(delta) {
+            if (player && !isNaN(player.duration)) {
+                player.currentTime = Math.max(0, Math.min(player.duration, player.currentTime + delta));
+            }
         }
 
-        function scrollToBottom() {
-            chatContainer.scrollTop = chatContainer.scrollHeight;
+        function formatTime(sec) {
+            const s = Math.floor(sec);
+            const mins = Math.floor(s / 60);
+            const remainingSecs = s % 60;
+            return `${mins}:${remainingSecs.toString().padStart(2, '0')}`;
         }
 
-        function disableInput() {
-            input.disabled = true;
-            sendBtn.disabled = true;
+        // Markdown renderer with safe fallback
+        function renderMarkdown(rawText) {
+            if (typeof marked !== "undefined" && marked.parse) {
+                return marked.parse(rawText);
+            }
+            // Basic fallback
+            return rawText
+                .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
+                .replace(/\*(.*?)\*/g, '<em>$1</em>')
+                .replace(/`(.*?)`/g, '<code>$1</code>')
+                .replace(/\n/g, '<br>');
         }
 
-        function enableInput() {
-            input.disabled = false;
-            sendBtn.disabled = false;
-            input.focus();
+        // Clean agent response text from Python stringified artifacts
+        function cleanAgentText(raw) {
+            let text = raw.replace(/^(\u{1F9E0}\s*)?Final [Aa]nswer:\s*/u, "");
+            
+            // Safety guard: if text was stringified Python list like [{'type': 'text', 'text': '...'}]
+            if (text.startsWith("[{'type': 'text'") || text.startsWith('[{"type": "text"')) {
+                try {
+                    // Try to extract text fields using regex
+                    const matches = [...text.matchAll(/'text':\s*'([^']*)'/g)];
+                    if (matches.length > 0) {
+                        text = matches.map(m => m[1]).join("\n");
+                    }
+                } catch(e) {}
+            }
+            return text;
         }
+
+        // WebSocket Connection
+        function connectWebSocket() {
+            const wsProto = window.location.protocol === "https:" ? "wss:" : "ws:";
+            ws = new WebSocket(`${wsProto}//${window.location.host}/ws/ask`);
+
+            ws.onopen = () => {
+                wsDot.classList.remove("disconnected");
+                wsStatus.textContent = "Agent Ready";
+            };
+
+            ws.onclose = () => {
+                wsDot.classList.add("disconnected");
+                wsStatus.textContent = "Reconnecting...";
+                setTimeout(connectWebSocket, 2000);
+            };
+
+            ws.onerror = (err) => {
+                console.error("WebSocket error:", err);
+            };
+
+            ws.onmessage = (event) => {
+                const data = event.data;
+
+                // Finished Streaming
+                if (data === "[DONE]") {
+                    removeTypingIndicator();
+                    if (activeAiMsg && lastCues.length > 0) {
+                        renderCueChips(activeAiMsg, lastCues);
+                    }
+                    activeAiMsg = null;
+                    lastCues = [];
+                    setControls(true);
+                    return;
+                }
+
+                // Metadata Cues Payload
+                if (data.startsWith("__METADATA__")) {
+                    try {
+                        const parsed = JSON.parse(data.replace("__METADATA__", ""));
+                        if (parsed.type === "PLAYBACK_CUES") {
+                            lastCues = parsed.cues || [];
+                            
+                            // Auto-play the first playable cue if video exists on disk
+                            const firstPlayable = lastCues.find(c => c.file_exists !== false && (diskVideos.length === 0 || diskVideos.includes(c.video_name)));
+                            if (firstPlayable) {
+                                seekTo(firstPlayable.video_name, firstPlayable.timestamp_sec);
+                            } else if (lastCues.length > 0 && lastCues[0].file_exists === false) {
+                                cueReadout.innerHTML = `<span style="color:var(--warning)">⚠️ Best match is in "${lastCues[0].video_name}" (not in data/videos)</span>`;
+                            }
+                        }
+                    } catch(e) {
+                        console.error("Failed to parse metadata", e);
+                    }
+                    return;
+                }
+
+                // Intermediate System updates
+                if (data.startsWith("🔄") || data.startsWith("✅")) {
+                    removeTypingIndicator();
+                    appendSystemMessage(data);
+                    showTypingIndicator();
+                    activeAiMsg = null;
+                    return;
+                }
+
+                // AI Answer
+                removeTypingIndicator();
+                if (!activeAiMsg) {
+                    activeAiMsg = document.createElement("div");
+                    activeAiMsg.className = "msg msg-ai";
+                    activeAiMsg.innerHTML = `
+                        <div class="msg-header">🤖 Video Analysis Agent</div>
+                        <div class="markdown-content"></div>
+                    `;
+                    chat.appendChild(activeAiMsg);
+                }
+
+                const contentEl = activeAiMsg.querySelector(".markdown-content");
+                const cleaned = cleanAgentText(data);
+                contentEl.innerHTML = renderMarkdown(cleaned);
+                chat.scrollTop = chat.scrollHeight;
+            };
+        }
+
+        function renderCueChips(container, cues) {
+            const header = document.createElement("div");
+            header.className = "cue-strip-header";
+            header.innerHTML = `<span>🎯 Matched Scenes & Moments (${cues.length}):</span>`;
+            container.appendChild(header);
+
+            const grid = document.createElement("div");
+            grid.className = "cue-grid";
+
+            cues.forEach(cue => {
+                const card = document.createElement("div");
+                const isPlayable = cue.file_exists !== false && (diskVideos.length === 0 || diskVideos.includes(cue.video_name));
+                card.className = `cue-card ${isPlayable ? '' : 'missing-file'}`;
+
+                const thumbHtml = cue.frame_url ?
+                    `<img class="cue-thumb" src="${cue.frame_url}" alt="Frame thumbnail" onerror="this.outerHTML='<div class=\\'cue-thumb-fallback\\'>🎬</div>'">` :
+                    `<div class="cue-thumb-fallback">${cue.modality === 'audio' ? '🎙️' : '🎬'}</div>`;
+
+                const statusBadge = isPlayable ?
+                    `<span class="cue-status-badge playable">● Play</span>` :
+                    `<span class="cue-status-badge missing">⚠️ Missing file</span>`;
+
+                card.innerHTML = `
+                    ${thumbHtml}
+                    <div class="cue-details">
+                        <div class="cue-meta-row">
+                            <span class="cue-time-badge">⏱️ ${cue.formatted || cue.timestamp_sec + 's'}</span>
+                            <span class="cue-video-name" title="${cue.video_name}">${cue.video_name}</span>
+                            <span class="cue-modality-badge">${cue.modality || 'visual'}</span>
+                            ${statusBadge}
+                        </div>
+                        <div class="cue-caption" title="${cue.caption || ''}">${cue.caption || 'Scene match'}</div>
+                    </div>
+                `;
+
+                card.onclick = () => seekTo(cue.video_name, cue.timestamp_sec);
+                grid.appendChild(card);
+            });
+
+            container.appendChild(grid);
+            chat.scrollTop = chat.scrollHeight;
+        }
+
+        function sendQuery() {
+            const q = queryInput.value.trim();
+            if (!q || !ws || ws.readyState !== WebSocket.OPEN) return;
+
+            setControls(false);
+            appendUserMessage(q);
+            showTypingIndicator();
+            ws.send(q);
+            queryInput.value = "";
+        }
+
+        function quickQuery(text) {
+            queryInput.value = text;
+            sendQuery();
+        }
+
+        function appendUserMessage(text) {
+            const el = document.createElement("div");
+            el.className = "msg msg-user";
+            el.innerHTML = `
+                <div class="msg-header">👤 You</div>
+                <div>${escapeHtml(text)}</div>
+            `;
+            chat.appendChild(el);
+            chat.scrollTop = chat.scrollHeight;
+        }
+
+        function appendSystemMessage(text) {
+            const el = document.createElement("div");
+            el.className = `msg-system ${text.startsWith("🔄") ? 'tool-call' : 'tool-result'}`;
+            el.textContent = text;
+            chat.appendChild(el);
+            chat.scrollTop = chat.scrollHeight;
+        }
+
+        function showTypingIndicator() {
+            removeTypingIndicator();
+            const ind = document.createElement("div");
+            ind.id = "typing-ind";
+            ind.className = "msg msg-ai";
+            ind.style.width = "auto";
+            ind.style.display = "inline-flex";
+            ind.innerHTML = `
+                <div class="typing-indicator">
+                    <div class="typing-dot"></div>
+                    <div class="typing-dot"></div>
+                    <div class="typing-dot"></div>
+                </div>
+            `;
+            chat.appendChild(ind);
+            chat.scrollTop = chat.scrollHeight;
+        }
+
+        function removeTypingIndicator() {
+            const ind = document.getElementById("typing-ind");
+            if (ind) ind.remove();
+        }
+
+        function setControls(enabled) {
+            queryInput.disabled = !enabled;
+            sendBtn.disabled = !enabled;
+            if (enabled) queryInput.focus();
+        }
+
+        function escapeHtml(str) {
+            return str.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+        }
+
+        // Initialize on load
+        window.addEventListener("DOMContentLoaded", () => {
+            loadVideoCatalog();
+            connectWebSocket();
+            queryInput.focus();
+        });
     </script>
 </body>
 </html>
