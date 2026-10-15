@@ -13,7 +13,14 @@ from dotenv import load_dotenv
 
 from models import VideoFrame, Base
 
-warnings.filterwarnings("ignore", category=UserWarning, module="torch")
+warnings.filterwarnings("ignore", category=UserWarning)
+warnings.filterwarnings("ignore", message=".*Kwargs passed to.*")
+try:
+    from transformers import logging as transformers_logging
+    transformers_logging.set_verbosity_error()
+except ImportError:
+    pass
+
 load_dotenv()
 
 DATABASE_URL = os.getenv("DATABASE_URL")
@@ -114,6 +121,11 @@ def caption_frames(metadata: list):
     import mlx.core as mx
     from mlx_vlm import load, generate
     from mlx_vlm.prompt_utils import apply_chat_template
+    try:
+        from transformers import logging as transformers_logging
+        transformers_logging.set_verbosity_error()
+    except ImportError:
+        pass
 
     model_path = "mlx-community/Qwen2-VL-2B-Instruct-4bit"
     print(f"Loading local Vision-Language Model: {model_path} into Unified Memory...")
